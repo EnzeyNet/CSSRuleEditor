@@ -2,7 +2,7 @@
 
 	var module = angular.module('net.enzey.service.css.editor', []);
 
-	module.service('CssRuleEditor', function($window) {
+	module.service('nzCssRuleEditor', function($window) {
 		// Create a new style sheet to hold custom styles
 		$('head').append($('<style><>/style'));
 
