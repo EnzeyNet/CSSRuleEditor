@@ -1,4 +1,4 @@
-(function(angular, $) {
+(function(angular) {
 
 	var module = angular.module('net.enzey.service.css.editor', []);
 
@@ -13,7 +13,7 @@
 		var styleSetter = $window.document.all ? 'value' : 'style'; //account for IE and FF
 
 		var CssRuleEditor = this;
-		var customRuleCache = {};
+		var cssRuleCache = {};
 
 		var getJsStyleName = function(styleName) {
 			var firstCharacterRegex = new RegExp('^.');
@@ -38,7 +38,8 @@
 		var extractStyles = function(styles) {
 			var extractedStyles = {};
 			for (var i = 0; i < styles.length; i++) {
-				extractedStyles[ styles[i] ] = styles[ getJsStyleName(styles[i]) ];
+				var styleName = getJsStyleName(styles[i]);
+				extractedStyles[ styleName ] = styles[ styleName ];
 			}
 			return extractedStyles;
 		};
@@ -60,10 +61,10 @@
 						selector = selector.replace(new RegExp('^ *'), '');
 						selector = selector.replace(new RegExp(' *$'), '');
 
-						if (!baseCssRules[selector]) {
-							baseCssRules[selector] = {};
+						if (!allCssRules[selector]) {
+							allCssRules[selector] = {};
 						}
-						angular.extend(baseCssRules[selector], styles);
+						angular.extend(allCssRules[selector], styles);
 					});
 				}
 			};
@@ -111,7 +112,7 @@
 			return allPromises;
 		};
 
-		var baseCssRules = {};
+		var allCssRules = {};
 		var baseStyleSheets = [];
 
 		this.getBaseRules = function() {
@@ -120,7 +121,7 @@
 				styleSheetCache.forEach(function(styleSheet) {
 					parseStyleSheet(styleSheet);
 				});
-				return angular.extend({}, baseCssRules);
+				return angular.extend({}, allCssRules);
 			});
 
 			return promise;
@@ -129,7 +130,7 @@
 		this.getCustomRule = function(ruleName) {
 			if (!ruleName) return;
 
-			var cssRule = customRuleCache[ruleName];
+			var cssRule = cssRuleCache[ruleName];
 			if (!cssRule) {
 				// Rules does not exist
 				styleSheet.insertRule(ruleName + ' {}', 0);
@@ -140,9 +141,9 @@
 				} else {
 					cssRules = styleSheet['cssRules'];
 				}
-				customRuleCache[ruleName] = cssRules[0];
-				//customRuleCache[ruleName] = styleSheet[cssRuleCode][0];
-				cssRule = customRuleCache[ruleName];
+				cssRuleCache[ruleName] = cssRules[0];
+				//cssRuleCache[ruleName] = styleSheet[cssRuleCode][0];
+				cssRule = cssRuleCache[ruleName];
 			}
 			var styles;
 			if (cssRule['value']) {
@@ -162,21 +163,21 @@
 				var cssRule = cssRules[i];
 				if (cssRule.selectorText.toLowerCase() === ruleName.toLowerCase()) {
 					styleSheet.deleteRule(i);
-					customRuleCache[ruleName] = null;
-					delete customRuleCache[ruleName];
+					cssRuleCache[ruleName] = null;
+					delete cssRuleCache[ruleName];
 				}
 			}
 		};
 
 		this.getAllCustomRules = function() {
-			return $.extend({}, customRuleCache);
+			return $.extend({}, cssRuleCache);
 		};
 
 		this.removeAllCustomRules = function() {
-			Object.keys(customRuleCache).forEach(function (ruleName){
+			Object.keys(cssRuleCache).forEach(function (ruleName){
 				CssRuleEditor.removeRule(ruleName);
 			});
 		};
 	});
 
-})(angular, jQuery);
+})(angular);
