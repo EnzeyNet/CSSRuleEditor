@@ -2,7 +2,7 @@
 
 	var module = angular.module('net.enzey.service.css.editor', []);
 
-	module.service('nzCssRuleEditor', function($window) {
+	module.service('nzCssRuleEditor', function($window, $http, $q) {
 		// Create a new style sheet to hold custom styles
 		$('head').append($('<style><>/style'));
 
@@ -13,12 +13,123 @@
 		var styleSetter = $window.document.all ? 'value' : 'style'; //account for IE and FF
 
 		var CssRuleEditor = this;
-		var cssRuleCache = {};
+		var customRuleCache = {};
 
-		this.getRule = function(ruleName) {
+		var getJsStyleName = function(styleName) {
+			var firstCharacterRegex = new RegExp('^.');
+			styleName = styleName.split('-');
+			for (var i = 1; i < styleName.length; i++) {
+				styleName[i] = styleName[i].replace(firstCharacterRegex, styleName[i][0].toUpperCase());
+			}
+
+			return styleName.join('');
+		};
+
+		var getCssRules = function(styleSheet) {
+			var cssRules;
+			if (styleSheet['rules']) {
+				cssRules = styleSheet['rules'];
+			} else {
+				cssRules = styleSheet['cssRules'];
+			}
+			return cssRules;
+		};
+
+		var extractStyles = function(styles) {
+			var extractedStyles = {};
+			for (var i = 0; i < styles.length; i++) {
+				extractedStyles[ styles[i] ] = styles[ getJsStyleName(styles[i]) ];
+			}
+			return extractedStyles;
+		};
+
+		var parseStyleSheet = function(styleSheet) {
+			var cssRules = getCssRules(styleSheet);
+
+			for (var iRule = 0; iRule < cssRules.length; iRule++) {
+				var cssRule = cssRules[iRule];
+				if (cssRule instanceof CSSStyleRule) {
+					var styles;
+					if (cssRule['value']) {
+						styles = cssRule['value'];
+					} else {
+						styles = cssRule['style'];
+					}
+					styles = extractStyles(styles);
+					cssRule.selectorText.split(',').forEach(function(selector) {
+						selector = selector.replace(new RegExp('^ *'), '');
+						selector = selector.replace(new RegExp(' *$'), '');
+
+						if (!baseCssRules[selector]) {
+							baseCssRules[selector] = {};
+						}
+						angular.extend(baseCssRules[selector], styles);
+					});
+				}
+			};
+		};
+
+		var cacheStyleSheets = function() {
+			var allStyleSheets = $window.document.styleSheets;
+			var styleSheetCache = new Array(allStyleSheets.length-1);
+
+			var promises = [];
+			for (var i = 0; i < allStyleSheets.length-1; i++) {
+				(function () {
+					var index = i;
+					var currentStyleSheet = allStyleSheets[i];
+					var deferred = $q.defer();
+					promises.push(deferred.promise);
+
+					try {
+						getCssRules(currentStyleSheet);
+						styleSheetCache[index] = currentStyleSheet;
+						deferred.resolve(currentStyleSheet);
+					} catch (e) {
+						$http.get(currentStyleSheet.href).success(function(data, status, headers, config) {
+							var tempStyle = angular.element("<style></style>");
+							tempStyle.html(data);
+							angular.element($window.document.head).prepend(tempStyle);
+
+							var allStyleSheets = $window.document.styleSheets;
+							var lastStyleSheet = allStyleSheets[0];
+
+							styleSheetCache[index] = lastStyleSheet;
+
+							tempStyle.remove();
+							deferred.resolve(lastStyleSheet);
+						}).error(function(data, status, headers, config) {
+							deferred.reject();
+						});
+					}
+				})()
+			}
+			var allPromises = $q.all(promises).then(function(foo, bar) {
+				return styleSheetCache;
+			});
+
+			return allPromises;
+		};
+
+		var baseCssRules = {};
+		var baseStyleSheets = [];
+
+		this.getBaseRules = function() {
+			var promise = cacheStyleSheets().then(function(styleSheetCache) {
+				baseStyleSheets = styleSheetCache;
+				styleSheetCache.forEach(function(styleSheet) {
+					parseStyleSheet(styleSheet);
+				});
+				return angular.extend({}, baseCssRules);
+			});
+
+			return promise;
+		};
+
+		this.getCustomRule = function(ruleName) {
 			if (!ruleName) return;
 
-			var cssRule = cssRuleCache[ruleName];
+			var cssRule = customRuleCache[ruleName];
 			if (!cssRule) {
 				// Rules does not exist
 				styleSheet.insertRule(ruleName + ' {}', 0);
@@ -29,9 +140,9 @@
 				} else {
 					cssRules = styleSheet['cssRules'];
 				}
-				cssRuleCache[ruleName] = cssRules[0];
-				//cssRuleCache[ruleName] = styleSheet[cssRuleCode][0];
-				cssRule = cssRuleCache[ruleName];
+				customRuleCache[ruleName] = cssRules[0];
+				//customRuleCache[ruleName] = styleSheet[cssRuleCode][0];
+				cssRule = customRuleCache[ruleName];
 			}
 			var styles;
 			if (cssRule['value']) {
@@ -43,7 +154,7 @@
 			//return cssRule[styleSetter];
 		};
 
-		this.removeRule = function(ruleName) {
+		this.removeCustomRule = function(ruleName) {
 			if (!ruleName) return;
 
 			var cssRules = styleSheet[cssRuleCode];
@@ -51,18 +162,18 @@
 				var cssRule = cssRules[i];
 				if (cssRule.selectorText.toLowerCase() === ruleName.toLowerCase()) {
 					styleSheet.deleteRule(i);
-					cssRuleCache[ruleName] = null;
-					delete cssRuleCache[ruleName];
+					customRuleCache[ruleName] = null;
+					delete customRuleCache[ruleName];
 				}
 			}
 		};
 
-		this.getAllRules = function() {
-			return $.extend({}, cssRuleCache);
+		this.getAllCustomRules = function() {
+			return $.extend({}, customRuleCache);
 		};
 
-		this.removeAllRules = function() {
-			Object.keys(cssRuleCache).forEach(function (ruleName){
+		this.removeAllCustomRules = function() {
+			Object.keys(customRuleCache).forEach(function (ruleName){
 				CssRuleEditor.removeRule(ruleName);
 			});
 		};
