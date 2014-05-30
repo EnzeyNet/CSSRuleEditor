@@ -4,7 +4,7 @@
 
 	module.service('nzCssRuleEditor', function($window, $http, $q) {
 		// Create a new style sheet to hold custom styles
-		$('head').append($('<style><>/style'));
+		angular.element($window.document.head).append($('<style><>/style'));
 
 		// Get last loaded style sheet (the style sheet just added)
 		var styleSheet = $window.document.styleSheets[document.styleSheets.length - 1];
