@@ -179,6 +179,27 @@
 			});
 		};
 
+		this.getRules = function(element) {
+			var deferred = $q.defer();
+
+			var rulesForElement = [];
+			var collectRules = function(rule) {
+				var foundElements = $window.document.querySelectorAll(rule);
+				for (var i = 0; i < foundElements.length; i++) {
+					if (element === foundElements[i]) {
+						rulesForElement.push(rule);
+						break;
+					}
+				}
+			}
+			CssRuleEditor.getBaseRules().then(function(rules) {
+				Object.keys(rules).forEach(collectRules);
+				Object.keys(CssRuleEditor.getAllCustomRules()).forEach(collectRules);
+				deferred.resolve(rulesForElement)
+			});
+
+			return deferred.promise;
+		}
 	});
 
 })(angular);
