@@ -170,7 +170,7 @@
 		};
 
 		this.getAllCustomRules = function() {
-			return $.extend({}, cssRuleCache);
+			return angular.extend({}, cssRuleCache);
 		};
 
 		this.removeAllCustomRules = function() {
@@ -178,6 +178,7 @@
 				CssRuleEditor.removeRule(ruleName);
 			});
 		};
+
 	});
 
 })(angular);
