@@ -1,4 +1,4 @@
-(function(angular) {
+(function(angular, CSC) {
 
 	var module = angular.module('net.enzey.service.css.editor', []);
 
@@ -9,8 +9,8 @@
 		// Get last loaded style sheet (the style sheet just added)
 		var styleSheet = $window.document.styleSheets[document.styleSheets.length - 1];
 
-		var cssRuleCode = $window.document.all ? 'rules' : 'cssRules'; //account for IE and FF
-		var styleSetter = $window.document.all ? 'value' : 'style'; //account for IE and FF
+		//var cssRuleCode = $window.document.all ? 'rules' : 'cssRules'; //account for IE and FF
+		//var styleSetter = $window.document.all ? 'value' : 'style'; //account for IE and FF
 
 		var CssRuleEditor = this;
 		var cssRuleCache = {};
@@ -23,6 +23,16 @@
 			}
 
 			return styleName.join('');
+		};
+
+		var getStyles = function(cssRule) {
+			var styles;
+			if (cssRule['value']) {
+				styles = cssRule['value'];
+			} else {
+				styles = cssRule['style'];
+			}
+			return styles;
 		};
 
 		var getCssRules = function(styleSheet) {
@@ -50,12 +60,7 @@
 			for (var iRule = 0; iRule < cssRules.length; iRule++) {
 				var cssRule = cssRules[iRule];
 				if (cssRule instanceof CSSStyleRule) {
-					var styles;
-					if (cssRule['value']) {
-						styles = cssRule['value'];
-					} else {
-						styles = cssRule['style'];
-					}
+					var styles = getStyles(cssRule);
 					styles = extractStyles(styles);
 					cssRule.selectorText.split(',').forEach(function(selector) {
 						selector = selector.replace(new RegExp('^ *'), '');
@@ -135,30 +140,20 @@
 				// Rules does not exist
 				styleSheet.insertRule(ruleName + ' {}', 0);
 
-				var cssRules;
-				if (styleSheet['rules']) {
-					cssRules = styleSheet['rules'];
-				} else {
-					cssRules = styleSheet['cssRules'];
-				}
+				var cssRules = getCssRules(styleSheet);
 				cssRuleCache[ruleName] = cssRules[0];
 				//cssRuleCache[ruleName] = styleSheet[cssRuleCode][0];
 				cssRule = cssRuleCache[ruleName];
 			}
-			var styles;
-			if (cssRule['value']) {
-				styles = cssRule['value'];
-			} else {
-				styles = cssRule['style'];
-			}
-			return styles;
+
+			return getStyles(cssRule);
 			//return cssRule[styleSetter];
 		};
 
 		this.removeCustomRule = function(ruleName) {
 			if (!ruleName) return;
 
-			var cssRules = styleSheet[cssRuleCode];
+			var cssRules = getCssRules(styleSheet);
 			for (var i = 0; i < cssRules.length; i++) {
 				var cssRule = cssRules[i];
 				if (cssRule.selectorText.toLowerCase() === ruleName.toLowerCase()) {
@@ -170,33 +165,65 @@
 		};
 
 		this.getAllCustomRules = function() {
-			return angular.extend({}, cssRuleCache);
+			var customStyles = {};
+			Object.keys(cssRuleCache).map(function(objKey) {
+				customStyles[objKey] = cssRuleCache[objKey];
+			});
+			return customStyles;
 		};
 
 		this.removeAllCustomRules = function() {
 			Object.keys(cssRuleCache).forEach(function (ruleName){
-				CssRuleEditor.removeRule(ruleName);
+				CssRuleEditor.removeCustomRule(ruleName);
 			});
 		};
 
-		this.getRules = function(element) {
+		this.getStyles = function(element) {
 			var deferred = $q.defer();
 
-			var rulesForElement = [];
 			var collectRules = function(rule) {
 				rule = rule.replace('/', '//');
 				var foundElements = $window.document.querySelectorAll(rule);
 				for (var i = 0; i < foundElements.length; i++) {
 					if (element === foundElements[i]) {
-						rulesForElement.push(rule);
-						break;
+						return rule;
 					}
 				}
-			}
-			CssRuleEditor.getBaseRules().then(function(rules) {
-				Object.keys(rules).forEach(collectRules);
-				Object.keys(CssRuleEditor.getAllCustomRules()).forEach(collectRules);
-				deferred.resolve(rulesForElement)
+			};
+
+			var createNumberFromSpecificity = function(specificity) {
+				specificity[1] << 20 | specificity[2] << 10 | specificity[3];
+			};
+			CssRuleEditor.getBaseRules().then(function(baseRules) {
+				var validStyles = [];
+				Object.keys(baseRules).map(collectRules).forEach(function(rule) {
+					if (!rule) {return;}
+					validStyles.push({
+						rule: rule,
+						styles: baseRules[rule],
+						specificity: CSC.calculate(rule)[0].specificity.split(',')
+					});
+				});
+				var customRules = CssRuleEditor.getAllCustomRules();
+				Object.keys(customRules).map(collectRules).forEach(function(rule) {
+					if (!rule) {return;}
+					validStyles.push({
+						rule: rule,
+						styles: extractStyles( getStyles(customRules[rule]) ),
+						specificity: CSC.calculate(rule)[0].specificity.split(',')
+					});
+				});
+
+				validStyles.sort(function(a, b){
+					return createNumberFromSpecificity(a) - createNumberFromSpecificity(b);
+				});
+
+				var stylesForElement = {};
+				validStyles.forEach(function(styleObj) {
+					angular.extend(stylesForElement, styleObj.styles);
+				});
+
+				deferred.resolve(stylesForElement)
 			});
 
 			return deferred.promise;
@@ -204,4 +231,4 @@
 
 	});
 
-})(angular);
+})(angular, SPECIFICITY);
