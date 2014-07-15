@@ -184,6 +184,7 @@
 
 			var rulesForElement = [];
 			var collectRules = function(rule) {
+				rule = rule.replace('/', '//');
 				var foundElements = $window.document.querySelectorAll(rule);
 				for (var i = 0; i < foundElements.length; i++) {
 					if (element === foundElements[i]) {
@@ -199,7 +200,8 @@
 			});
 
 			return deferred.promise;
-		}
+		};
+
 	});
 
 })(angular);
