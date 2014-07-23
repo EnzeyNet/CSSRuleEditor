@@ -165,11 +165,7 @@
 		};
 
 		this.getAllCustomRules = function() {
-			var customStyles = {};
-			Object.keys(cssRuleCache).map(function(objKey) {
-				customStyles[objKey] = cssRuleCache[objKey];
-			});
-			return customStyles;
+			return angular.extend({}, cssRuleCache);
 		};
 
 		this.removeAllCustomRules = function() {
@@ -178,21 +174,31 @@
 			});
 		};
 
+		var createNumberFromSpecificity = function(specificity) {
+			specificity[1] << 20 | specificity[2] << 10 | specificity[3];
+		};
+		var ruleSspecificityCache = {};
+		var getSpecificity = function(rule) {
+			var result = ruleSspecificityCache[rule];
+			if (!result) {
+				var specificity = CSC.calculate(rule)[0].specificity.split(',');
+				ruleSspecificityCache[rule] = createNumberFromSpecificity(specificity);
+				result = ruleSspecificityCache[rule];
+			}
+
+			return result;
+		};
+
 		this.getStyles = function(element) {
 			var deferred = $q.defer();
 
 			var collectRules = function(rule) {
-				rule = rule.replace('/', '//');
 				var foundElements = $window.document.querySelectorAll(rule);
 				for (var i = 0; i < foundElements.length; i++) {
 					if (element === foundElements[i]) {
 						return rule;
 					}
 				}
-			};
-
-			var createNumberFromSpecificity = function(specificity) {
-				specificity[1] << 20 | specificity[2] << 10 | specificity[3];
 			};
 			CssRuleEditor.getBaseRules().then(function(baseRules) {
 				var validStyles = [];
@@ -201,7 +207,6 @@
 					validStyles.push({
 						rule: rule,
 						styles: baseRules[rule],
-						specificity: CSC.calculate(rule)[0].specificity.split(',')
 					});
 				});
 				var customRules = CssRuleEditor.getAllCustomRules();
@@ -210,12 +215,11 @@
 					validStyles.push({
 						rule: rule,
 						styles: extractStyles( getStyles(customRules[rule]) ),
-						specificity: CSC.calculate(rule)[0].specificity.split(',')
 					});
 				});
 
 				validStyles.sort(function(a, b){
-					return createNumberFromSpecificity(a) - createNumberFromSpecificity(b);
+					return getSpecificity(a.rule) - getSpecificity(b.rule);
 				});
 
 				var stylesForElement = {};
